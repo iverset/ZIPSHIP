@@ -1,0 +1,501 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: GitPush API — GitHub repository management via Personal Access Token
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: GitHub token auth (session-based)
+  - name: github
+    description: GitHub operations (requires active session)
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /github/auth:
+    post:
+      operationId: loginWithToken
+      tags: [auth]
+      summary: Store GitHub PAT in session and return authenticated user info
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenInput"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GithubUser"
+        "401":
+          description: Invalid token
+    delete:
+      operationId: logout
+      tags: [auth]
+      summary: Clear GitHub PAT from session
+      responses:
+        "204":
+          description: Logged out
+
+  /github/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated GitHub user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GithubUser"
+        "401":
+          description: Not authenticated
+
+  /github/repos:
+    get:
+      operationId: listRepos
+      tags: [github]
+      summary: List repositories for the authenticated user
+      parameters:
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [created, updated, pushed, full_name]
+            default: updated
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        "200":
+          description: List of repos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Repo"
+    post:
+      operationId: createRepo
+      tags: [github]
+      summary: Create a new GitHub repository
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepoInput"
+      responses:
+        "201":
+          description: Repo created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repo"
+
+  /github/repos/{owner}/{repo}:
+    get:
+      operationId: getRepo
+      tags: [github]
+      summary: Get a single repository
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Repo details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repo"
+    delete:
+      operationId: deleteRepo
+      tags: [github]
+      summary: Delete a repository
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Repo deleted
+
+  /github/repos/{owner}/{repo}/contents:
+    get:
+      operationId: listContents
+      tags: [github]
+      summary: List root contents of a repository
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Directory contents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileEntry"
+
+  /github/repos/{owner}/{repo}/push:
+    post:
+      operationId: pushFile
+      tags: [github]
+      summary: Create or update a file in a repository (push)
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushFileInput"
+      responses:
+        "200":
+          description: File pushed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushResult"
+
+  /github/repos/{owner}/{repo}/branches:
+    get:
+      operationId: listBranches
+      tags: [github]
+      summary: List branches of a repository
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of branches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Branch"
+
+  /github/repos/{owner}/{repo}/commits:
+    get:
+      operationId: listCommits
+      tags: [github]
+      summary: List recent commits for a repository
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Recent commits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Commit"
+
+  /github/stats:
+    get:
+      operationId: getUserStats
+      tags: [github]
+      summary: Get aggregate stats for the authenticated user
+      responses:
+        "200":
+          description: User statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStats"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    TokenInput:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: GitHub Personal Access Token
+
+    GithubUser:
+      type: object
+      required: [login, id, avatar_url, public_repos, followers, following, html_url]
+      properties:
+        login:
+          type: string
+        id:
+          type: integer
+        name:
+          type: ["string", "null"]
+        avatar_url:
+          type: string
+        public_repos:
+          type: integer
+        followers:
+          type: integer
+        following:
+          type: integer
+        bio:
+          type: ["string", "null"]
+        location:
+          type: ["string", "null"]
+        blog:
+          type: ["string", "null"]
+        company:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        html_url:
+          type: string
+
+    Repo:
+      type: object
+      required: [id, name, full_name, private, html_url, fork, created_at, updated_at, default_branch, stargazers_count, forks_count, owner]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        full_name:
+          type: string
+        private:
+          type: boolean
+        html_url:
+          type: string
+        description:
+          type: ["string", "null"]
+        fork:
+          type: boolean
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        pushed_at:
+          type: ["string", "null"]
+        default_branch:
+          type: string
+        stargazers_count:
+          type: integer
+        forks_count:
+          type: integer
+        open_issues_count:
+          type: integer
+        language:
+          type: ["string", "null"]
+        owner:
+          $ref: "#/components/schemas/RepoOwner"
+        clone_url:
+          type: ["string", "null"]
+        size:
+          type: integer
+
+    RepoOwner:
+      type: object
+      required: [login, avatar_url]
+      properties:
+        login:
+          type: string
+        avatar_url:
+          type: string
+
+    RepoInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        private:
+          type: boolean
+          default: false
+        auto_init:
+          type: boolean
+          default: true
+
+    FileEntry:
+      type: object
+      required: [name, path, type, size, sha]
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        type:
+          type: string
+          enum: [file, dir, symlink, submodule]
+        size:
+          type: integer
+        sha:
+          type: string
+        html_url:
+          type: ["string", "null"]
+        download_url:
+          type: ["string", "null"]
+
+    PushFileInput:
+      type: object
+      required: [path, content, message]
+      properties:
+        path:
+          type: string
+          description: File path within the repo
+        content:
+          type: string
+          description: File content (plain text; will be base64-encoded server-side)
+        message:
+          type: string
+          description: Commit message
+        branch:
+          type: ["string", "null"]
+          description: Branch to push to (defaults to repo default branch)
+        sha:
+          type: ["string", "null"]
+          description: SHA of existing file (required to update existing files)
+
+    PushResult:
+      type: object
+      required: [commit_sha, commit_url, content_path]
+      properties:
+        commit_sha:
+          type: string
+        commit_url:
+          type: string
+        content_path:
+          type: string
+
+    Branch:
+      type: object
+      required: [name, sha, protected]
+      properties:
+        name:
+          type: string
+        sha:
+          type: string
+        protected:
+          type: boolean
+
+    Commit:
+      type: object
+      required: [sha, message, author_name, author_date, html_url]
+      properties:
+        sha:
+          type: string
+        message:
+          type: string
+        author_name:
+          type: string
+        author_date:
+          type: string
+        html_url:
+          type: string
+        author_avatar:
+          type: ["string", "null"]
+
+    UserStats:
+      type: object
+      required: [total_repos, total_stars, total_forks, public_repos, private_repos, languages]
+      properties:
+        total_repos:
+          type: integer
+        total_stars:
+          type: integer
+        total_forks:
+          type: integer
+        public_repos:
+          type: integer
+        private_repos:
+          type: integer
+        languages:
+          type: array
+          items:
+            $ref: "#/components/schemas/LanguageStat"
+
+    LanguageStat:
+      type: object
+      required: [language, count]
+      properties:
+        language:
+          type: string
+        count:
+          type: integer
